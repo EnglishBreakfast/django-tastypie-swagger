@@ -42,7 +42,7 @@ class ResourceSwaggerMapping(object):
     def __init__(self, resource):
         self.resource = resource
         self.resource_name = self.resource._meta.resource_name
-        self.resource_module_dir = os.path.dirname(inspect.getfile(self.resource))
+        self.resource_module_dir = os.path.dirname(inspect.getfile(self.resource.__class__))
         self.schema = self.resource.build_schema()
 
     def get_resource_verbose_name(self, plural=False):
@@ -61,12 +61,11 @@ class ResourceSwaggerMapping(object):
         plural = not detail and method is 'get'
         verbose_name = self.get_resource_verbose_name(plural=plural)
         try:
-            resource_docpath = os.path.join(self.resource_module_dir, self.resource_name, '.md')
+            resource_docpath = os.path.join(self.resource_module_dir, 'docs', str(self.resource.__class__.__name__) + '.md')
             resource_docfile = open(resource_docpath, 'r')
             desc = resource_docfile.read()
-            print "resource description: %s" % desc
             return desc
-        except IOError:
+        except IOError as e:
             summary = self.OPERATION_SUMMARIES.get(key, '')
             if summary:
                 return summary % verbose_name
@@ -106,14 +105,7 @@ class ResourceSwaggerMapping(object):
         for name, field in self.schema['fields'].items():
             # Ignore readonly fields
             if not ignore_readonly or (not field['readonly'] and not name in IGNORED_FIELDS):
-                try:
-                    field_docpath = os.path.join(self.resource_module_dir, self.resource_name, '.',
-                            field, '.md')
-                    field_docfile = open(resource_docpath, 'r')
-                    description = resource_docfile.read()
-                    print "field description: %s" % description
-                except IOError:
-                    description = force_unicode(field['help_text'])
+                description = force_unicode(field['help_text'])
                 parameters.append(self.build_parameter(
                     name=name,
                     dataType=field['type'],
@@ -365,15 +357,20 @@ class ResourceSwaggerMapping(object):
                 field['default'] = None
             elif isinstance(field.get('default'), datetime.datetime):
                 field['default'] = field.get('default').isoformat()
-
+            try:
+                field_docpath = os.path.join(self.resource_module_dir, 'docs', str(self.resource.__class__.__name__) + 
+                    '.fields.' + name + '.md')
+                field_docfile = open(field_docpath, 'r')
+                description = force_unicode(field_docfile.read())
+            except IOError as e:
+                description = force_unicode(field.get('help_text', ''))
             properties.update(self.build_property(
                     name,
                     field.get('type'),
                     # note: 'help_text' is a Django proxy which must be wrapped
                     # in unicode *specifically* to get the actual help text.
-                    force_unicode(field.get('help_text', '')),
+                    description),
                 )
-            )
         return properties
 
     def build_model(self, resource_name, id, properties):

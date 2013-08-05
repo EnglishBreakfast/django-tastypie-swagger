@@ -1,4 +1,6 @@
 import datetime
+import os
+import inspect
 from django.core.urlresolvers import reverse
 from django.db.models.sql.constants import QUERY_TERMS
 from django.utils.encoding import force_unicode
@@ -40,6 +42,7 @@ class ResourceSwaggerMapping(object):
     def __init__(self, resource):
         self.resource = resource
         self.resource_name = self.resource._meta.resource_name
+        self.resource_module_dir = os.path.dirname(inspect.getfile(self.resource))
         self.schema = self.resource.build_schema()
 
     def get_resource_verbose_name(self, plural=False):
@@ -57,10 +60,17 @@ class ResourceSwaggerMapping(object):
         key = '%s-%s' % (method.lower(), detail and 'detail' or 'list')
         plural = not detail and method is 'get'
         verbose_name = self.get_resource_verbose_name(plural=plural)
-        summary = self.OPERATION_SUMMARIES.get(key, '')
-        if summary:
-            return summary % verbose_name
-        return ''
+        try:
+            resource_docpath = os.path.join(self.resource_module_dir, self.resource_name, '.md')
+            resource_docfile = open(resource_docpath, 'r')
+            desc = resource_docfile.read()
+            print "resource description: %s" % desc
+            return desc
+        except IOError:
+            summary = self.OPERATION_SUMMARIES.get(key, '')
+            if summary:
+                return summary % verbose_name
+            return ''
 
     def get_resource_base_uri(self):
         """
@@ -91,17 +101,24 @@ class ResourceSwaggerMapping(object):
 #            parameter.update({'allowableValues': allowed_values})
         return parameter
 
-    def build_parameters_from_fields(self):   
+    def build_parameters_from_fields(self, ignore_readonly=False):   
         parameters = []
         for name, field in self.schema['fields'].items():
             # Ignore readonly fields
-            if not field['readonly'] and not name in IGNORED_FIELDS:
+            if not ignore_readonly or (not field['readonly'] and not name in IGNORED_FIELDS):
+                try:
+                    field_docpath = os.path.join(self.resource_module_dir, self.resource_name, '.',
+                            field, '.md')
+                    field_docfile = open(resource_docpath, 'r')
+                    description = resource_docfile.read()
+                    print "field description: %s" % description
+                except IOError:
+                    description = force_unicode(field['help_text'])
                 parameters.append(self.build_parameter(
                     name=name,
                     dataType=field['type'],
                     required=not field['blank'],
-                    description=force_unicode(field['help_text']),
-                ))
+                    description=description))
         return parameters
 
     def build_parameters_for_list(self, method='GET'):

@@ -53,6 +53,19 @@ class ResourceSwaggerMapping(object):
             return verbose_name.lower()
         return self.resource_name
 
+    def get_operation_notes(self):
+        """
+        Fetch operation notes from markdown
+        """
+        try:
+            resource_docpath = os.path.join(self.resource_module_dir, 'docs', str(self.resource.__class__.__name__) + '.md')
+            resource_docfile = open(resource_docpath, 'r')
+            desc = resource_docfile.read()
+            return desc
+        except IOError as e:
+            return ''
+
+
     def get_operation_summary(self, detail=True, method='get'):
         """
         Get a basic summary string for a single operation
@@ -60,16 +73,10 @@ class ResourceSwaggerMapping(object):
         key = '%s-%s' % (method.lower(), detail and 'detail' or 'list')
         plural = not detail and method is 'get'
         verbose_name = self.get_resource_verbose_name(plural=plural)
-        try:
-            resource_docpath = os.path.join(self.resource_module_dir, 'docs', str(self.resource.__class__.__name__) + '.md')
-            resource_docfile = open(resource_docpath, 'r')
-            desc = resource_docfile.read()
-            return desc
-        except IOError as e:
-            summary = self.OPERATION_SUMMARIES.get(key, '')
-            if summary:
-                return summary % verbose_name
-            return ''
+        summary = self.OPERATION_SUMMARIES.get(key, '')
+        if summary:
+            return summary % verbose_name
+        return ''
 
     def get_resource_base_uri(self):
         """
@@ -253,7 +260,7 @@ class ResourceSwaggerMapping(object):
             'parameters': [self.build_parameter(paramType='path', name=self._detail_uri_name(), dataType='int', description='ID of resource')],
             'responseClass': self.resource_name,
             'nickname': '%s-detail' % self.resource_name,
-            'notes': self.resource.__doc__,
+            'notes': self.get_operation_notes(),
         }
         return operation
 
@@ -264,7 +271,7 @@ class ResourceSwaggerMapping(object):
             'parameters': self.build_parameters_for_list(method=method),
             'responseClass': 'ListView' if method.upper() == 'GET' else self.resource_name,
             'nickname': '%s-list' % self.resource_name,
-            'notes': self.resource.__doc__,
+            'notes': self.get_operation_notes(),
         }
 
     def build_extra_operation(self, extra_action):
@@ -342,7 +349,7 @@ class ResourceSwaggerMapping(object):
 
         return prop
 
-    def build_properties_from_fields(self, method='get'):
+    def build_properties_from_fields(self, method='get', use_default=False):
         properties = {}
 
         for name, field in self.schema['fields'].items():
@@ -363,7 +370,9 @@ class ResourceSwaggerMapping(object):
                 field_docfile = open(field_docpath, 'r')
                 description = force_unicode(field_docfile.read())
             except IOError as e:
-                description = force_unicode(field.get('help_text', ''))
+                description = ''
+                if use_default:
+                    description = force_unicode(field.get('help_text', ''))
             properties.update(self.build_property(
                     name,
                     field.get('type'),

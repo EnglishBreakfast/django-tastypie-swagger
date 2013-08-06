@@ -338,11 +338,12 @@ class ResourceSwaggerMapping(object):
         apis.extend(self.build_extra_apis())
         return apis
 
-    def build_property(self, name, type, description=""):
+    def build_property(self, name, type, required, description=""):
         prop = {
             name: {
                 'type': type,
                 'description': description,
+                'required': required,
             }
         }
 
@@ -374,8 +375,9 @@ class ResourceSwaggerMapping(object):
                     field.get('type'),
                     # note: 'help_text' is a Django proxy which must be wrapped
                     # in unicode *specifically* to get the actual help text.
-                    description),
-                )
+                    not field['blank'],
+                    description=description,
+                ))
         return properties
 
     def build_model(self, resource_name, id, properties):
@@ -420,7 +422,8 @@ class ResourceSwaggerMapping(object):
         objects_properties.update(
             self.build_property(
                 self.resource_name,
-                "List")
+                "List",
+                True)
         )
         # Build the Objects class added by tastypie in the list view.
         models.update(
@@ -434,12 +437,14 @@ class ResourceSwaggerMapping(object):
         list_properties = {}
         list_properties.update(self.build_property(
             'meta',
-            'Meta'
+            'Meta',
+            True
         ))
 
         list_properties.update(self.build_property(
             'objects',
-            'Objects'
+            'Objects',
+            True
         ))
         models.update(
             self.build_model(

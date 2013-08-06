@@ -38,6 +38,7 @@ def md_parse_docs(fn):
     first_h1 = etr.find('body/h1')
 
     if first_h1 is not None:
+        section, field = first_h1.text, ''
         for e in first_h1.itersiblings():
             if e.tag == 'h1':
                 section, field = e.text, ''

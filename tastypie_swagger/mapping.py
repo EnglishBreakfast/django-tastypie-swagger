@@ -46,7 +46,6 @@ class ResourceSwaggerMapping(object):
 
         resource_module_dir = os.path.dirname(inspect.getfile(self.resource.__class__))
         resource_docpath = os.path.join(resource_module_dir, 'docs', str(self.resource.__class__.__name__) + '.md')
-        print resource_docpath
         self.resource_docs = self.get_resource_docs(resource_docpath)
 
     def get_resource_verbose_name(self, plural=False):

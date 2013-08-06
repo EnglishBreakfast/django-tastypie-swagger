@@ -6,7 +6,7 @@ from django.db.models.sql.constants import QUERY_TERMS
 from django.utils.encoding import force_unicode
 from tastypie import fields
 
-from .utils import trailing_slash_or_none, urljoin_forced
+from .utils import trailing_slash_or_none, urljoin_forced, md_parse_docs
 
 
 # Ignored POST fields
@@ -42,8 +42,12 @@ class ResourceSwaggerMapping(object):
     def __init__(self, resource):
         self.resource = resource
         self.resource_name = self.resource._meta.resource_name
-        self.resource_module_dir = os.path.dirname(inspect.getfile(self.resource.__class__))
         self.schema = self.resource.build_schema()
+
+        resource_module_dir = os.path.dirname(inspect.getfile(self.resource.__class__))
+        resource_docpath = os.path.join(resource_module_dir, 'docs', str(self.resource.__class__.__name__) + '.md')
+        print resource_docpath
+        self.resource_docs = self.get_resource_docs(resource_docpath)
 
     def get_resource_verbose_name(self, plural=False):
         qs = self.resource._meta.queryset
@@ -53,17 +57,15 @@ class ResourceSwaggerMapping(object):
             return verbose_name.lower()
         return self.resource_name
 
-    def get_operation_notes(self):
+    def get_resource_docs(self, resource_docpath):
         """
-        Fetch operation notes from markdown
+        Fetch resource docs from markdown
         """
         try:
-            resource_docpath = os.path.join(self.resource_module_dir, 'docs', str(self.resource.__class__.__name__) + '.md')
-            resource_docfile = open(resource_docpath, 'r')
-            desc = resource_docfile.read()
-            return desc
-        except IOError as e:
-            return ''
+            with open(resource_docpath): pass
+            return md_parse_docs(resource_docpath)
+        except IOError:
+            return {}
 
 
     def get_operation_summary(self, detail=True, method='get'):
@@ -260,7 +262,7 @@ class ResourceSwaggerMapping(object):
             'parameters': [self.build_parameter(paramType='path', name=self._detail_uri_name(), dataType='int', description='ID of resource')],
             'responseClass': self.resource_name,
             'nickname': '%s-detail' % self.resource_name,
-            'notes': self.get_operation_notes(),
+            'notes': self.resource_docs.get(('Overview', ''), ''),
         }
         return operation
 
@@ -271,7 +273,7 @@ class ResourceSwaggerMapping(object):
             'parameters': self.build_parameters_for_list(method=method),
             'responseClass': 'ListView' if method.upper() == 'GET' else self.resource_name,
             'nickname': '%s-list' % self.resource_name,
-            'notes': self.get_operation_notes(),
+            'notes': self.resource_docs.get(('Overview', ''), ''),
         }
 
     def build_extra_operation(self, extra_action):
@@ -364,15 +366,9 @@ class ResourceSwaggerMapping(object):
                 field['default'] = None
             elif isinstance(field.get('default'), datetime.datetime):
                 field['default'] = field.get('default').isoformat()
-            try:
-                field_docpath = os.path.join(self.resource_module_dir, 'docs', str(self.resource.__class__.__name__) + 
-                    '.fields.' + name + '.md')
-                field_docfile = open(field_docpath, 'r')
-                description = force_unicode(field_docfile.read())
-            except IOError as e:
-                description = ''
-                if use_default:
-                    description = force_unicode(field.get('help_text', ''))
+            description = force_unicode(self.resource_docs.get(('Fields', name), ''))
+            if use_default and not description:
+                description = force_unicode(field.get('help_text', ''))
             properties.update(self.build_property(
                     name,
                     field.get('type'),

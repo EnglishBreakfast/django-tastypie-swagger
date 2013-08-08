@@ -1,11 +1,12 @@
 import datetime
 import os
 import inspect
+import itertools
 from django.core.urlresolvers import reverse
 from django.db.models.sql.constants import QUERY_TERMS
 from django.utils.encoding import force_unicode
 from tastypie import fields
-
+from tastypie.resources import ModelResource
 from .utils import trailing_slash_or_none, urljoin_forced, md_parse_docs
 
 
@@ -44,9 +45,7 @@ class ResourceSwaggerMapping(object):
         self.resource_name = self.resource._meta.resource_name
         self.schema = self.resource.build_schema()
 
-        resource_module_dir = os.path.dirname(inspect.getfile(self.resource.__class__))
-        resource_docpath = os.path.join(resource_module_dir, 'docs', str(self.resource.__class__.__name__) + '.md')
-        self.resource_docs = self.get_resource_docs(resource_docpath)
+        self.resource_docs = self.get_resource_docs()
 
     def get_resource_verbose_name(self, plural=False):
         qs = self.resource._meta.queryset
@@ -56,15 +55,31 @@ class ResourceSwaggerMapping(object):
             return verbose_name.lower()
         return self.resource_name
 
-    def get_resource_docs(self, resource_docpath):
+    def get_resource_docs(self):
         """
         Fetch resource docs from markdown
         """
-        try:
-            with open(resource_docpath): pass
-            return md_parse_docs(resource_docpath)
-        except IOError:
-            return {}
+
+        def is_model_resource(c):
+            return c is not ModelResource
+
+        resource_bases = list(reversed(list(itertools.takewhile(is_model_resource, self.resource.__class__.__mro__ ))))
+        print resource_bases
+        docs = {}
+
+        for resource_base in resource_bases:
+            resource_module_dir = os.path.dirname(inspect.getfile(resource_base))
+            resource_docpath = os.path.join(resource_module_dir, 'docs', str(resource_base.__name__) + '.md')
+
+
+            try:
+                with open(resource_docpath): pass
+                docs_parsed = md_parse_docs(resource_docpath)
+                docs.update(docs_parsed)
+            except IOError:
+                pass
+
+        return docs
 
 
     def get_operation_summary(self, detail=True, method='get'):

@@ -63,8 +63,7 @@ class ResourceSwaggerMapping(object):
         def is_model_resource(c):
             return c is not ModelResource
 
-        resource_bases = list(reversed(list(itertools.takewhile(is_model_resource, self.resource.__class__.__mro__ ))))
-        print resource_bases
+        resource_bases = reversed(list(itertools.takewhile(is_model_resource, self.resource.__class__.__mro__ )))
         docs = {}
 
         for resource_base in resource_bases:
@@ -352,11 +351,12 @@ class ResourceSwaggerMapping(object):
         apis.extend(self.build_extra_apis())
         return apis
 
-    def build_property(self, name, type, required, description=""):
+    def build_property(self, name, type, required, description="", readonly=False):
         prop = {
             name: {
                 'type': type,
                 'description': description,
+                'readonly': readonly,
                 'required': required,
             }
         }
@@ -366,7 +366,7 @@ class ResourceSwaggerMapping(object):
 
         return prop
 
-    def build_properties_from_fields(self, method='get', use_default=False):
+    def build_properties_from_fields(self, method='get', use_default=True):
         properties = {}
 
         for name, field in self.schema['fields'].items():
@@ -383,13 +383,14 @@ class ResourceSwaggerMapping(object):
                 field['default'] = field.get('default').isoformat()
             description = force_unicode(self.resource_docs.get(('Fields', name), ''))
             if use_default and not description:
-                description = force_unicode(field.get('help_text', ''))
+                description = force_unicode('By default: ' + field.get('help_text', ''))
             properties.update(self.build_property(
                     name,
                     field.get('type'),
                     # note: 'help_text' is a Django proxy which must be wrapped
                     # in unicode *specifically* to get the actual help text.
                     not field['blank'],
+                    readonly=field.get('readonly') or False,
                     description=description,
                 ))
         return properties

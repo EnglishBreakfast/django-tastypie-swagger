@@ -1,5 +1,7 @@
 import sys
 import json
+import inspect
+import os
 
 from django.views.generic import TemplateView
 from django.http import HttpResponse, Http404
@@ -7,7 +9,10 @@ from django.core.exceptions import ImproperlyConfigured
 from django.core.urlresolvers import reverse
 from django.conf import settings
 
+from markdown import markdown
+
 from .mapping import ResourceSwaggerMapping
+from .utils import md_parse_docs
 
 
 class TastypieApiMixin(object):
@@ -29,6 +34,34 @@ class TastypieApiMixin(object):
         if not tastypie_api:
             raise ImproperlyConfigured("%s is not a valid tastypie.api.Api instance" % tastypie_api_module)
         self.tastypie_api = tastypie_api
+
+
+    def _get_technical_overview_docs(self):
+        docs_root = os.path.dirname(inspect.getfile(self.tastypie_api._registry.values()[0].__class__))
+        overview_docpaths = [os.path.join(docs_root, 'docs', 'overview', p) for p in os.listdir(os.path.join(docs_root, 'docs', 'overview')) if '.md' in p]
+        docs = {}
+        as_doc = ''
+
+        for overview_docpath in overview_docpaths:
+            try:
+                with open(overview_docpath, 'r') as f:
+                    as_doc += "\n\n" + f.read()
+                docs_parsed = md_parse_docs(overview_docpath)
+                docs.update(docs_parsed)
+            except IOError:
+                pass
+
+        resp = {}
+
+        for doc_k, doc_v in docs.iteritems():
+            doc_v = markdown(doc_v, safe_mode='escape')
+            section, field = doc_k
+            if not section in resp:
+                resp[section] = {field: doc_v}
+            else:
+                resp[section].update({field: doc_v})
+
+        return dict(as_dict=resp, as_doc=markdown(as_doc, safe_mode='escape')) 
 
 
 class SwaggerApiDataMixin(object):
@@ -89,6 +122,7 @@ class ResourcesView(TastypieApiMixin, SwaggerApiDataMixin, JSONView):
         context.update({
             'basePath': self.request.build_absolute_uri(reverse('tastypie_swagger:schema')),
             'apis': apis,
+            'overview': self._get_technical_overview_docs()
         })
         return context
 

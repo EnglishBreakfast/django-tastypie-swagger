@@ -170,14 +170,19 @@ class ResourceSwaggerMapping(object):
                 ('offset','int','Specify the offset to start displaying element on a page.'),
             ]
             for name, type, desc in navigation_filters:
+                description = self.resource_docs.get(
+                    ('Filters', name),
+                    force_unicode(desc)
+                )
                 parameters.append(self.build_parameter(
                     paramType="query",
                     name=name,
                     dataType=type,
                     required=False,
-                    description=force_unicode(desc),
+                    description=description,
                 ))
         if 'filtering' in self.schema and method.upper() == 'GET':
+            #for name, field in self.resource.build_filters(filters = self.schema['filtering']).iteritems():
             for name, field in self.schema['filtering'].items():
                 # Integer value means this points to a related model
                 if field in [ALL, ALL_WITH_RELATIONS]:
@@ -207,21 +212,33 @@ class ResourceSwaggerMapping(object):
                         related_mapping = ResourceSwaggerMapping(related_resource)
                         parameters.extend(related_mapping.build_parameters_from_filters(prefix="%s%s__" % (prefix, name)))
 
-                if isinstance( field, list ):
+                if isinstance(field, list):
+                    if ('Filters', name) in self.resource_docs:
+                        schema_field = self.schema['fields'][name]
+                        # probably a custom filter
+                        description = self.resource_docs.get(
+                        ('Filters', name),
+                            force_unicode(schema_field['help_text'])
+                        )
                     # Skip if this is an incorrect filter
-                    if name not in self.schema['fields']: continue
+                    elif name not in self.schema['fields']: continue
 
                     schema_field = self.schema['fields'][name]
                     for query in field:
-                        if query == 'exact':
+                        description = ''
+                        description = self.resource_docs.get(
+                            ('Filters', name),
+                        )
+                        if not description:
                             description = force_unicode(schema_field['help_text'])
+                        if query == 'exact':
                             dataType = schema_field['type']
                             # Use a better description for related models with exact filter
                             if dataType == 'related':
                                 # Assume that related pk is an integer
                                 # TODO if youre not using integer ID for pk then we need to look this up somehow
                                 dataType = 'integer'
-                                description = 'ID of related resource'
+                                description = description or 'ID of related resource'
                             parameters.append(self.build_parameter(
                                 paramType="query",
                                 name="%s%s" % (prefix, name),
@@ -235,7 +252,7 @@ class ResourceSwaggerMapping(object):
                                 name="%s%s__%s" % (prefix, name, query),
                                 dataType=schema_field['type'],
                                 required= False,
-                                description=force_unicode(schema_field['help_text']),
+                                description=description,
                             ))
 
         return parameters
@@ -276,6 +293,7 @@ class ResourceSwaggerMapping(object):
             'responseClass': self.resource_name,
             'nickname': '%s-detail' % self.resource_name,
             'notes': self.resource_docs.get(('Overview', ''), ''),
+            'filters_overview': self.resource_docs.get(('Filters', ''), '')
         }
         return operation
 
@@ -287,6 +305,7 @@ class ResourceSwaggerMapping(object):
             'responseClass': 'ListView' if method.upper() == 'GET' else self.resource_name,
             'nickname': '%s-list' % self.resource_name,
             'notes': self.resource_docs.get(('Overview', ''), ''),
+            'filters_overview': self.resource_docs.get(('Filters', ''), '')
         }
 
     def build_extra_operation(self, extra_action):

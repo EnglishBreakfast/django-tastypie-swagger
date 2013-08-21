@@ -38,7 +38,12 @@ class TastypieApiMixin(object):
 
     def _get_technical_overview_docs(self):
         docs_root = os.path.dirname(inspect.getfile(self.tastypie_api._registry.values()[0].__class__))
-        overview_docpaths = [os.path.join(docs_root, 'docs', 'overview', p) for p in os.listdir(os.path.join(docs_root, 'docs', 'overview')) if '.md' in p]
+        overview_docpaths = [ os.path.join(docs_root, 'docs', 'overview', p)
+            for p in os.listdir(
+                os.path.join( docs_root, 'docs', 'overview' )
+            )
+            if '.md' in p
+        ]
         docs = {}
         as_doc = ''
 

@@ -2,7 +2,6 @@ import datetime
 import os
 import inspect
 import itertools
-from django.core.urlresolvers import reverse
 from django.db.models.sql.constants import QUERY_TERMS
 from django.utils.encoding import force_unicode
 from tastypie import fields
@@ -186,7 +185,9 @@ class ResourceSwaggerMapping(object):
             for name, field in self.schema['filtering'].items():
                 # Integer value means this points to a related model
                 if field in [ALL, ALL_WITH_RELATIONS]:
-                    if field == ALL: #TODO: Show all possible ORM filters for this field
+                    #TODO: Show all possible ORM filters for this field
+                    #Check if filtered field has ALL_WITH_RELATIONS but is not a related resource
+                    if field == ALL or (field == ALL_WITH_RELATIONS and not hasattr(field, "get_related_resource")):
                         #This code has been mostly sucked from the tastypie lib
                         if getattr(self.resource._meta, 'queryset', None) is not None:
                             # Get the possible query terms from the current QuerySet.

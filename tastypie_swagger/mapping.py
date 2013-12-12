@@ -403,7 +403,7 @@ class ResourceSwaggerMapping(object):
                 field['default'] = field.get('default').isoformat()
             description = force_unicode(self.resource_docs.get(('Fields', name), ''))
             if use_default and not description:
-                description = force_unicode('By default: ' + field.get('help_text', ''))
+                description = force_unicode(field.get('help_text', ''))
             properties.update(self.build_property(
                     name,
                     field.get('type'),
